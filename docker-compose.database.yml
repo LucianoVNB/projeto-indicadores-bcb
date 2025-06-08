@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  db_silver:
+    image: postgres:13
+    container_name: postgres_silver_db
+    environment:
+      POSTGRES_USER: user_silver
+      POSTGRES_PASSWORD: password_silver
+      POSTGRES_DB: silver_db
+    ports:
+      - "5433:5432" # Mapeando para a porta 5433 para não conflitar com o Postgre do Airflow
+    volumes:
+      - silver_db_data:/var/lib/postgresql/data
+
+volumes:
+  silver_db_data:
