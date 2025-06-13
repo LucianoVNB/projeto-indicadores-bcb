@@ -9,33 +9,8 @@ from pyspark.sql.types import DoubleType
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 import glob
 
-# Caminho para a camada Bronze e Silver
-BRONZE_PATH = '/home/Luciano/Documents/Projetos/Rep/projeto-indicadores-bcb/data/bronze'
-SILVER_PATH = '/home/Luciano/Documents/Projetos/Rep/projeto-indicadores-bcb/data/silver'
-
-# Define o período de anos para a carga
-ANO_INICIO_CARGA = 2015
-ANO_FIM_CARGA = datetime.now().year
-
-# Dicionário com as informações dos indicadores
-INDICADORES = {
-    'selic': {
-        'id_serie': '11',
-        'prefixo_arquivo': 'selic_', # Prefixo para o nome do arquivo
-        'nome_tabela_pg': 'taxa_selic_mensal'
-    },
-    'ipca': {
-        'id_serie': '433',
-        'prefixo_arquivo': 'ipca_', # Prefixo para o nome do arquivo
-        'nome_tabela_pg': 'taxa_ipca_mensal'
-    }
-}
-
-
-print(f"Configurações definidas. Período de carga: de {ANO_INICIO_CARGA} a {ANO_FIM_CARGA}")
-
 #Funcao para execucao completa da camada bronze
-def executar_carga_completa_bronze(indicador_nome, indicador_info):
+def executa_carga_completa_bronze(indicador_nome, indicador_info, bronze_path, ano_inicio_carga, ano_fim_carga):
     
     #Para um determinado indicador, itera de ANO_INICIO_CARGA até o ano atual.
     #Verifica se o arquivo daquele ano existe na camada Bronze.
@@ -44,12 +19,12 @@ def executar_carga_completa_bronze(indicador_nome, indicador_info):
     print(f"\n--- [Carga completa Bronze] Processando indicador: {indicador_nome.upper()} ---")
 
     # Loop para cada ano no intervalo definido
-    for ano in range(ANO_INICIO_CARGA, ANO_FIM_CARGA + 1):
+    for ano in range(ano_inicio_carga, ano_fim_carga + 1):
         print(f"  Verificando ano: {ano}")
 
         # 1. Monta o nome e o caminho do arquivo
         nome_arquivo = f"{indicador_info['prefixo_arquivo']}{ano}.json"
-        caminho_arquivo_anual = os.path.join(BRONZE_PATH, nome_arquivo)
+        caminho_arquivo_anual = os.path.join(bronze_path, nome_arquivo)
 
         # 2. Verifica se o arquivo do ano em questao existe
         if os.path.exists(caminho_arquivo_anual):
@@ -80,7 +55,7 @@ def executar_carga_completa_bronze(indicador_nome, indicador_info):
             print(f"    Sucesso! {len(dados)} registros encontrados para {ano}.")
 
             # 4. Salva os dados no arquivo anual
-            os.makedirs(BRONZE_PATH, exist_ok=True)
+            os.makedirs(bronze_path, exist_ok=True)
             with open(caminho_arquivo_anual, 'w', encoding='utf-8') as f:
                 json.dump(dados, f, ensure_ascii=False, indent=4)
             
@@ -92,7 +67,7 @@ def executar_carga_completa_bronze(indicador_nome, indicador_info):
 
 
 #Funcao de transformacao de bronze para silver em parquet 
-def executa_carga_completa_silver_para_parquet(spark, indicador_nome, indicador_info):
+def executa_carga_completa_silver_para_parquet(spark, indicador_nome, indicador_info, bronze_path, silver_path):
     
     #Carrega JSON da camada Bronze, aplica transformações
     #e salva o resultado em formato Parquet na camada Silver.
@@ -100,7 +75,7 @@ def executa_carga_completa_silver_para_parquet(spark, indicador_nome, indicador_
     print(f"\n--- [Carga completa Silver para Parquet] Processando indicador: {indicador_nome.upper()} ---")
     
     # Lista os arquivos JSON na camada Bronze
-    caminho_padrao_bronze = os.path.join(BRONZE_PATH, f"{indicador_info['prefixo_arquivo']}*.json")
+    caminho_padrao_bronze = os.path.join(bronze_path, f"{indicador_info['prefixo_arquivo']}*.json")
     lista_de_arquivos = glob.glob(caminho_padrao_bronze) #Equivalente: ls ./data/bronze/selic_*.json
 
     if not lista_de_arquivos:
@@ -133,7 +108,7 @@ def executa_carga_completa_silver_para_parquet(spark, indicador_nome, indicador_
         df_final = df_bronze_transformado.withColumn("indicador", lit("SELIC"))
     elif indicador_nome == 'ipca':
         print("  Renomeando colunas para IPCA.")
-        df_bronze_transformado = df_bronze_transformado.withColumnRenamed("valor", "percentual_variacao")
+        df_bronze_transformado = df_bronze_transformado.withColumnRenamed("valor", "valor_mensal")
         df_final = df_bronze_transformado.withColumn("indicador", lit("IPCA"))
     
 
@@ -141,21 +116,21 @@ def executa_carga_completa_silver_para_parquet(spark, indicador_nome, indicador_
     df_final.printSchema()
     
     # Salva o resultado em formato Parquet na camada Silver
-    caminho_escrita_silver = os.path.join(SILVER_PATH, indicador_nome)
+    caminho_escrita_silver = os.path.join(silver_path, indicador_nome)
     print(f"  Gravando dados em Parquet em: {caminho_escrita_silver}")
     df_final.write.mode("overwrite").parquet(caminho_escrita_silver)
     
     return True # Retorna True para indicar que a próxima etapa pode ser executada
 
 #Funcao 
-def executa_carga_completa_silver_para_postgres(spark, indicador_nome, indicador_info):
+def executa_carga_completa_silver_para_postgres(spark, indicador_nome, indicador_info, silver_path):
     
     #Função 2: Lê os dados em formato Parquet da camada Silver
     #e os carrega para uma tabela no banco de dados PostgreSQL.
 
     print(f"\n--- [Carga completa Silver para Postgre] Carregando {indicador_nome.upper()} para o PostgreSQL ---")
     
-    caminho_leitura_silver = os.path.join(SILVER_PATH, indicador_nome)
+    caminho_leitura_silver = os.path.join(silver_path, indicador_nome)
     
     # Lê os dados em Parquet da camada Silver
     print(f"  Lendo dados Parquet de: {caminho_leitura_silver}")
@@ -163,7 +138,7 @@ def executa_carga_completa_silver_para_postgres(spark, indicador_nome, indicador
 
     # Configurações de conexão com o banco de dados
     pg_properties = {"user": "user_silver", "password": "password_silver", "driver": "org.postgresql.Driver"}
-    pg_url = "jdbc:postgresql://localhost:5433/silver_db"
+    pg_url = "jdbc:postgresql://db_silver:5432/silver_db"
 
     # Escreve o DataFrame na tabela do PostgreSQL
     print(f"  Gravando dados na tabela '{indicador_info['nome_tabela_pg']}'")
@@ -175,26 +150,9 @@ def executa_carga_completa_silver_para_postgres(spark, indicador_nome, indicador
     )
     print("  Dados carregados no PostgreSQL com sucesso.")
 
-for nome_indicador, info_indicador in INDICADORES.items():
-    executar_carga_completa_bronze(nome_indicador, info_indicador)
-
-    print("\nProcesso de carga inicial concluído!")
-
-spark = SparkSession.builder \
-    .appName("PipelineIndicadoresEconomicos") \
-    .config("spark.jars.packages", "org.postgresql:postgresql:42.6.0") \
-    .getOrCreate()
-        
-print("\n>>> Sessão Spark criada com sucesso! <<<\n")
-
-#3. Executa a camada Silver em duas etapas
-for nome, info in INDICADORES.items():
-    # Etapa 1: Transformação de Bronze para Silver (Parquet)
-    sucesso_transformacao = executa_carga_completa_silver_para_parquet(spark, nome, info)
-
-    # Etapa 2: Carregamento de Silver (Parquet) para o PostgreSQL
-    # Só executa se a transformação gerou arquivos
-    if sucesso_transformacao:
-        executa_carga_completa_silver_para_postgres(spark, nome, info)
-
-spark.stop()
+def cria_spark_session():
+    spark = SparkSession.builder \
+        .appName("PipelineIndicadoresEconomicos") \
+        .config("spark.jars.packages", "org.postgresql:postgresql:42.6.0") \
+        .getOrCreate()
+    return spark
