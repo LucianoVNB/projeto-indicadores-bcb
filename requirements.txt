@@ -73,6 +73,7 @@ httpx==0.28.1
 idna==3.10
 importlib_metadata==8.7.0
 inflection==0.5.1
+iniconfig==2.1.0
 ipykernel==6.29.5
 ipython==9.3.0
 ipython_pygments_lexers==1.1.1
@@ -155,6 +156,7 @@ pycparser==2.22
 Pygments==2.19.1
 PyJWT==2.10.1
 pyspark==4.0.0
+pytest==8.4.0
 python-daemon==3.1.2
 python-dateutil==2.9.0.post0
 python-json-logger==3.3.0

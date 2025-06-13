@@ -1,5 +1,5 @@
 # Nome do seu fluxo de trabalho. Aparecerá na aba "Actions" do seu repositório.
-name: Python CI Pipeline
+name: Python CI/CD Pipeline with Tests
 
 # Define os gatilhos (triggers) que iniciam o workflow.
 # Neste caso, a cada 'push' ou 'pull_request' para a branch 'main'.
@@ -11,7 +11,7 @@ on:
 
 # Define os "trabalhos" (jobs) que serão executados.
 jobs:
-  build:
+  build-and-test:
     # O tipo de máquina virtual que será usada. 'ubuntu-latest' é o padrão.
     runs-on: ubuntu-latest
 
@@ -32,8 +32,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install flake8 pytest
 
       # 4. Faz o "Lint" do código com flake8 para verificar a qualidade.
       #    --count: mostra o número total de erros.
@@ -44,3 +44,16 @@ jobs:
         run: |
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
+       # 5. Valida a sintaxe dos arquivos da DAG
+      #    Este comando tenta compilar todos os arquivos .py na pasta dags.
+      #    Se houver um erro de sintaxe, o workflow falhará aqui.
+      - name: Validate Airflow DAGs syntax
+        run: |
+          python -m compileall dags/
+
+      # 6. Executa Testes Unitários com Pytest
+      #    O pytest irá automaticamente encontrar e executar todos os testes
+      #    na pasta `tests/`. Se qualquer teste falhar, o workflow falha.
+      - name: Run Unit Tests with Pytest
+        run: |
+          pytest
