@@ -56,4 +56,4 @@ jobs:
       #    na pasta `tests/`. Se qualquer teste falhar, o workflow falha.
       - name: Run Unit Tests with Pytest
         run: |
-          pytest
+          PYTHONPATH=. pytest
